@@ -136,7 +136,7 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
 
         for j,(train_index,test_index) in enumerate(skf.split(train_x, train_y)):
             tr_x = train_x[train_index]
-            tr_y = train_y.to_numpy()[train_index]
+            tr_y = train_y.values[train_index]
             if i == 5:
                 # reshape X to be [samples, time steps, features]
                 tr_x = np.reshape(tr_x, (tr_x.shape[0], 1, tr_x.shape[1]))
@@ -218,9 +218,10 @@ if __name__ == "__main__":
     corr_matrix = df[df['label'].notnull()].corr().abs()
     upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k = 1).astype(np.bool))
     to_drop = [column for column in upper.columns if any(upper[column] >= threshold)]
-    df_removed = df.drop(columns = to_drop)
+    #df_removed = df.drop(columns = to_drop)
+    df_removed = df.drop(to_drop, axis=1)
     
-    X = df_removed.drop(columns = ['label'])
+    X = df_removed.drop(['label'], axis=1)
     y = df_removed[['label']]
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)

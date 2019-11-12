@@ -29,7 +29,7 @@ def stacked_LSTM(X_test, y_test):
     model.add(LSTM(200, return_sequences=True)) #32
     model.add(LSTM(200)) # 32 # 200
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
     
 def CNN(X_train, y_test):
@@ -40,7 +40,7 @@ def CNN(X_train, y_test):
     model.add(MaxPooling1D(pool_size=2))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #model.compile(loss=losses.categorical_crossentropy, optimizer=optimizers.SGD(lr=0.01), metrics=['accuracy'])
     #print(model.summary())
@@ -55,7 +55,7 @@ def CNN_LSTM(X_train, y_test, dropoutRate):
     model.add(LSTM(200)) # 256
     model.add(Dropout(dropoutRate))
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #model.compile(loss='categorical_crossentropy', optimizer='adam')
     #model.compile(loss=losses.categorical_crossentropy, optimizer=optimizers.SGD(lr=0.01), metrics=['accuracy'])
     #print(model.summary())
@@ -72,7 +72,7 @@ def LSTM_with_dropout(X_train, y_test, dropout_rate):
     #model.add(Dropout(dropout_rate))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #print(model.summary())
     #history = model.fit(X_train, y_train, batch_size, epochs)
     return model
@@ -82,7 +82,7 @@ def basic_LSTM(X_train, y_test):
     model.add(LSTM(100, input_shape=(X_train.shape[1],X_train.shape[2]), return_sequences=True)) # 33
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #print(model.summary())
     #history = model.fit(X_train, y_train, batch_size, epochs)
     return model
@@ -92,7 +92,7 @@ def Bidirectional_LSTM(X_train, y_test):
     model.add(Bidirectional(LSTM(100, return_sequences=True), input_shape=(X_train.shape[1],X_train.shape[2])))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 # define baseline model
@@ -111,7 +111,7 @@ def DNN(X_train, Y_train, dropout):
     #model.add(Dropout(dropout))
     #sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
     model.add(Dense(Y_train.shape[1], init='normal', activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
     return model
 

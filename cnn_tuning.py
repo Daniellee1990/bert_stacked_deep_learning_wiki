@@ -36,10 +36,10 @@ print(skopt.__version__)
 dim_learning_rate = Real(low=1e-6, high=1e-2, prior='log-uniform',
                          name='learning_rate')
 dim_num_filter1 = Integer(low=4, high=32, name='num_filter1')
-dim_num_kernel_size1 = [3, 5, 7, 11]
+dim_num_kernel_size1 = Integer(low=3, high=11, name='num_kernel_size1')
 dim_activation = Categorical(categories=['relu', 'sigmoid', 'softmax'],
                              name='activation')
-dim_num_filter2 = [3, 5, 7, 11]
+dim_num_filter2 = Integer(low=3, high=11, name='num_kernel_size2')
 dim_num_kernel_size2 = Integer(low=3, high=5, name='num_kernel_size2')
 
 dimensions = [dim_learning_rate,
@@ -48,8 +48,6 @@ dimensions = [dim_learning_rate,
               dim_num_filter2,
               dim_num_kernel_size2,
               dim_activation]
-
-default_parameters = [1e-5, 4, 3, 4, 3, 'relu']
 
 def log_dir_name(learning_rate, num_filter1,
                  num_kernel_size1, num_filter2,
@@ -67,9 +65,6 @@ def log_dir_name(learning_rate, num_filter1,
                        activation)
 
     return log_dir
-
-#data.test.cls = np.argmax(data.test.labels, axis=1)
-#validation_data = (data.validation.images, data.validation.labels)
 
 x_train, x_test, y_train, y_test = dp.data_preparation('all_features_with_label.csv')
 input_shape = (x_train.shape[1], 1)
@@ -116,6 +111,9 @@ def create_model(learning_rate, num_filter1,
 
 path_best_model = '19_best_model.keras'
 best_accuracy = 0.0
+
+default_parameters = [1e-5, 4, 3, 4, 3, 'relu']
+
 @use_named_args(dimensions=dimensions)
 def fitness(learning_rate, num_filter1,
              num_kernel_size1, num_filter2,

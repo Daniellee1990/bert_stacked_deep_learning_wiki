@@ -43,7 +43,6 @@ dim_num_dense_layers = Integer(low=1, high=5, name='num_dense_layers')
 dim_num_dense_nodes = Integer(low=5, high=512, name='num_dense_nodes')
 dim_activation = Categorical(categories=['relu', 'sigmoid', 'softmax'],
                              name='activation')
-
 dimensions = [dim_learning_rate,
               dim_num_dense_layers,
               dim_num_dense_nodes,
@@ -219,3 +218,6 @@ search_result = gp_minimize(func=fitness,
                             x0=default_parameters)
 
 print(search_result.x)
+
+with open('out.txt', 'w') as f:
+    print('best result:', search_result.x, file=f)

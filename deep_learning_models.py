@@ -4,12 +4,12 @@
 Created on Tue Jan 23 12:23:54 2018
 
 @author: lixiaodan
+https://github.com/bojone/keras_lookahead
 """
 
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.optimizers import SGD
 from keras.layers import LSTM, Bidirectional
 from keras.layers.convolutional import Conv1D
 from keras.layers.convolutional import MaxPooling1D
@@ -21,18 +21,87 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn import metrics
 from sklearn.metrics import log_loss
+from keras.optimizers import Adam, SGD, RMSprop, Adadelta, Adagrad, Adamax, Nadam
+from keras.utils import plot_model
+from lookahead import Lookahead
 
 def stacked_LSTM(X_test, y_test):
     ## CNN LSTM
     model = Sequential()
-    model.add(LSTM(100, return_sequences=True, input_shape=(1, X_test.shape[2]))) # 32 # 50
-    model.add(LSTM(200, return_sequences=True)) #32
-    model.add(LSTM(200)) # 32 # 200
-    model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.add(LSTM(42, return_sequences=True, input_shape=(1, X_test.shape[2]))) # 32 # 50
+    model.add(LSTM(348, return_sequences=True)) 
+
+    model.add(Flatten())
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='sigmoid'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.0001141303940684644)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    plot_model(model, to_file='../result/stacked_lstm.png', show_shapes=True, show_layer_names=True) # plot my model
+    return model
+
+def stacked_LSTM_lookahead(X_test, y_test):
+    ## CNN LSTM
+    model = Sequential()
+    model.add(LSTM(91, return_sequences=True, input_shape=(1, X_test.shape[2]))) # 32 # 50
+    model.add(LSTM(97, return_sequences=True)) 
+
+    model.add(Flatten())
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='softmax'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=4.313502169608129e-05)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model) # 插入到模型中
+    
+    plot_model(model, to_file='../result/stacked_lstm.png', show_shapes=True, show_layer_names=True) # plot my model
     return model
     
 def CNN(X_train, y_test):
+    ## CNN
+    model = Sequential()
+    model.add(Conv1D(input_shape=(X_train.shape[1], 1), filters=19, kernel_size=[9], 
+                     padding='same', activation='relu', name='layer_conv1'))
+    model.add(MaxPooling1D(pool_size=2))
+    
+    model.add(Conv1D(kernel_size=[26], filters=12,
+                     padding='same', activation='relu', name='layer_conv2'))
+    model.add(MaxPooling1D(pool_size=2))
+
+    # Flatten the 4-rank output of the convolutional layers
+    # to 2-rank that can be input to a fully-connected / dense layer.
+    model.add(Flatten())
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='softmax'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.0004104646460561052)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model
+
+def CNN_lookahead(X_train, y_test):
     ## CNN
     model = Sequential()
     #model.add(Conv1D(input_shape=(X_train.shape[1], 1), filters=5, kernel_size=1, activation='relu'))
@@ -40,26 +109,81 @@ def CNN(X_train, y_test):
     model.add(MaxPooling1D(pool_size=2))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
     #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     #model.compile(loss=losses.categorical_crossentropy, optimizer=optimizers.SGD(lr=0.01), metrics=['accuracy'])
     #print(model.summary())
     #history = model.fit(X_train, y_train, batch_size, epochs)
     return model
 
-def CNN_LSTM(X_train, y_test, dropoutRate):
-    ## CNN LSTM
+def CNN_LSTM(X_train, y_test):
     model = Sequential()
-    model.add(Conv1D(input_shape=(X_train.shape[1], 1), filters=8, kernel_size=3, padding='same', activation='relu'))
+    model.add(Conv1D(input_shape=(X_train.shape[1], 1), filters=14, kernel_size=[18], 
+                     padding='same', activation='relu', name='layer_conv1'))
     model.add(MaxPooling1D(pool_size=2))
-    model.add(LSTM(200)) # 256
-    model.add(Dropout(dropoutRate))
-    model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    #model.compile(loss='categorical_crossentropy', optimizer='adam')
-    #model.compile(loss=losses.categorical_crossentropy, optimizer=optimizers.SGD(lr=0.01), metrics=['accuracy'])
-    #print(model.summary())
-    #history = model.fit(X_train, y_train, batch_size, epochs)
+    
+    model.add(Conv1D(kernel_size=[30], filters=25,
+                     padding='same', activation='relu', name='layer_conv2'))
+    model.add(MaxPooling1D(pool_size=2))
+    
+    # Add fully-connected / dense layers.
+    # The number of layers is a hyper-parameter we want to optimize.
+    model.add(LSTM(359, return_sequences=True))
+    model.add(LSTM(359, return_sequences=True)) 
+    model.add(LSTM(359, return_sequences=True)) 
+
+    model.add(Flatten())
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='softmax'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.00010997321170422143)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    plot_model(model, to_file='../result/cnn_lstm.png', show_shapes=True, show_layer_names=True) # plot my model
+    return model
+
+def CNN_LSTM_lookahead(X_train, y_test):
+    model = Sequential()
+    model.add(Conv1D(input_shape=(X_train.shape[1], 1), filters=14, kernel_size=[18], 
+                     padding='same', activation='relu', name='layer_conv1'))
+    model.add(MaxPooling1D(pool_size=2))
+    
+    model.add(Conv1D(kernel_size=[30], filters=25,
+                     padding='same', activation='relu', name='layer_conv2'))
+    model.add(MaxPooling1D(pool_size=2))
+    
+    # Add fully-connected / dense layers.
+    # The number of layers is a hyper-parameter we want to optimize.
+    model.add(LSTM(359, return_sequences=True))
+    model.add(LSTM(359, return_sequences=True)) 
+    model.add(LSTM(359, return_sequences=True)) 
+
+    model.add(Flatten())
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='softmax'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.00010997321170422143)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
+    
+    plot_model(model, to_file='../result/cnn_lstm.png', show_shapes=True, show_layer_names=True) # plot my model
     return model
 
 def LSTM_with_dropout(X_train, y_test, dropout_rate):
@@ -72,17 +196,47 @@ def LSTM_with_dropout(X_train, y_test, dropout_rate):
     #model.add(Dropout(dropout_rate))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    #print(model.summary())
+    #history = model.fit(X_train, y_train, batch_size, epochs)
+    return model
+
+def LSTM_with_dropout_lookahead(X_train, y_test, dropout_rate):
+    ## stacked LSTM
+    model = Sequential()
+    model.add(LSTM(100, input_shape=(X_train.shape[1],X_train.shape[2]), return_sequences=True)) #33
+    #model.add(LSTM(32, return_sequences=True, input_shape=(1, x_test.shape[2])))
+    model.add(Dropout(dropout_rate))
+    #model.add(LSTM(100))
+    #model.add(Dropout(dropout_rate))
+    model.add(Flatten())
+    model.add(Dense(y_test.shape[1], activation='sigmoid'))
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
     #print(model.summary())
     #history = model.fit(X_train, y_train, batch_size, epochs)
     return model
 
 def basic_LSTM(X_train, y_test):
     model = Sequential()
+    model.add(LSTM(332, input_shape=(X_train.shape[1],X_train.shape[2]), return_sequences=True)) # 33
+    model.add(Flatten())
+    model.add(Dense(y_test.shape[1], activation='sigmoid'))
+    optimizer = Adagrad(lr=0.00014848706050504123)
+    model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+    #print(model.summary())
+    #history = model.fit(X_train, y_train, batch_size, epochs)
+    return model
+
+def basic_LSTM_lookahead(X_train, y_test):
+    model = Sequential()
     model.add(LSTM(100, input_shape=(X_train.shape[1],X_train.shape[2]), return_sequences=True)) # 33
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
     #print(model.summary())
     #history = model.fit(X_train, y_train, batch_size, epochs)
     return model
@@ -92,27 +246,73 @@ def Bidirectional_LSTM(X_train, y_test):
     model.add(Bidirectional(LSTM(100, return_sequences=True), input_shape=(X_train.shape[1],X_train.shape[2])))
     model.add(Flatten())
     model.add(Dense(y_test.shape[1], activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    return model
+
+def Bidirectional_LSTM_lookahead(X_train, y_test):
+    model = Sequential()
+    model.add(Bidirectional(LSTM(100, return_sequences=True), input_shape=(X_train.shape[1],X_train.shape[2])))
+    model.add(Flatten())
+    model.add(Dense(y_test.shape[1], activation='sigmoid'))
+    model.compile(loss='categorical_crossentropy', optimizer='Adagrad', metrics=['accuracy'])
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
     return model
 
 # define baseline model
-def DNN(X_train, Y_train, dropout):
+def DNN(X_train, Y_train):
 	# create model
-    model = Sequential() 
-    model.add(Dense(20, input_dim=X_train.shape[1], init='normal', activation='relu')) # 20
-    model.add(Dropout(dropout))
-    model.add(Dense(100, init='normal', activation='relu')) # 100
-    model.add(Dropout(dropout))
-    model.add(Dense(100, init='normal', activation='relu')) # 100
-    model.add(Dropout(dropout))
-    #model.add(Dense(200, init='normal', activation='relu'))
-    #model.add(Dropout(dropout))
-    #model.add(Dense(200, init='normal', activation='relu'))
-    #model.add(Dropout(dropout))
-    #sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    model.add(Dense(Y_train.shape[1], init='normal', activation='sigmoid'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    #model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+    model = Sequential()
+    model.add(Dense(210, input_dim=X_train.shape[1], init='normal', activation='relu')) # 20
+    model.add(Dropout(0.412660494242836))
+    # Add fully-connected / dense layers.
+    # The number of layers is a hyper-parameter we want to optimize.
+    model.add(Dense(185, activation='relu'))
+    model.add(Dropout(0.412660494242836))
+
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='sigmoid'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.0019214161130842798)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    plot_model(model, to_file='../result/DNN.png', show_shapes=True, show_layer_names=True) # plot my model
+    return model
+
+# define baseline model
+def DNN_lookahead(X_train, Y_train):
+	# create model
+    model = Sequential()
+    model.add(Dense(495, input_dim=X_train.shape[1], init='normal', activation='relu')) # 20
+    model.add(Dropout(0.11368248736379467))
+    # Add fully-connected / dense layers.
+    # The number of layers is a hyper-parameter we want to optimize.
+    model.add(Dense(443, activation='relu'))
+    model.add(Dropout(0.11368248736379467))
+
+    # Last fully-connected / dense layer with softmax-activation
+    # for use in classification.
+    model.add(Dense(3, activation='softmax'))
+    
+    # Use the Adam method for training the network.
+    # We want to find the best learning-rate for the Adam method.
+    optimizer = Adagrad(lr=0.00028755003327360373)
+    
+    # In Keras we need to compile the model so it can be trained.
+    model.compile(optimizer=optimizer,
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    
+    lookahead = Lookahead(k=5, alpha=0.5) # 初始化Lookahead
+    lookahead.inject(model)
+    
+    plot_model(model, to_file='../result/DNN.png', show_shapes=True, show_layer_names=True) # plot my model
     return model
 
 def getAccuracy(prediction, y_test): ### prediction and y_test are both encoded.
@@ -248,3 +448,16 @@ def plot_confusion_matrix(cm, classes,
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
+    
+def transform(pred):
+    pr_size = len(pred)
+    res = np.zeros((pr_size, 3))
+    for i in range(pr_size):
+        curLabel = int(pred[i])
+        if curLabel == 0:
+            res[i, 0] = 1
+        elif curLabel == 1:
+            res[i, 1] = 1
+        else:
+            res[i, 2] = 1
+    return res

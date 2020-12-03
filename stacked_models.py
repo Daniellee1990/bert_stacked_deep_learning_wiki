@@ -7,23 +7,22 @@ Created on Fri Aug  2 10:21:08 2019
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from sklearn.svm import SVC
+from catboost import CatBoostClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.neighbors import KNeighborsClassifier
 import xgboost as xgb
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.linear_model import LogisticRegression
 import pandas as pd
 from keras.utils import np_utils
-from sklearn.model_selection import train_test_split
-from deep_learning_models import stacked_LSTM, CNN, CNN_LSTM, LSTM_with_dropout, basic_LSTM, Bidirectional_LSTM, DNN, transformResult, getAccuracyMulti
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import MinMaxScaler 
+from deep_learning_models import stacked_LSTM, CNN, CNN_LSTM, LSTM_with_dropout, basic_LSTM, Bidirectional_LSTM, DNN, transformResult, stacked_LSTM_lookahead, CNN_lookahead, CNN_LSTM_lookahead, LSTM_with_dropout_lookahead, basic_LSTM_lookahead, Bidirectional_LSTM_lookahead, DNN_lookahead
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
+import lightgbm as lgb
+from sklearn.metrics import accuracy_score
+from matplotlib import pyplot
+import matplotlib.pyplot as plt
+#import catboost as cb
 
-def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
+def stacking(train_x, train_y, test_x, test_y, epochs, batch_size, lookahead=False):
 
     """ stacking
 
@@ -44,7 +43,7 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
     
     labels = pd.Series(train_y['label'])
     labels = labels.convert_objects(convert_numeric=True)
-    y_train_onehot = np_utils.to_categorical(labels)
+    y_train_onehot = np_utils.to_categorical(labels)        
     
     ### adjust the dataset dimension
     # reshape X to be [samples, time steps, features]
@@ -56,10 +55,8 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
     ### Stacked LSTM
     sLSTM_params = {
         'batch_size' : batch_size,
-        'epochs' : epochs #15
+        'epochs' : epochs
     }
-    
-    clf_sLSTM= stacked_LSTM(X_test_LSTM, y_test_onehot)
     
     ### input for CNN
     X_train_CNN = np.reshape(train_x, (train_x.shape[0], train_x.shape[1], 1))
@@ -67,26 +64,22 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
     
     ### CNN
     CNN_params = {
-        'batch_size' : batch_size,
-        'epochs' : epochs #15
+        'batch_size' : 5,
+        'epochs' : 109 #15
     }
     
-    clf_cnn= CNN(X_train_CNN, y_test_onehot)
-
     ### CNN LSTM
     CNN_LSTM_params = {
         'batch_size' : batch_size,
         'epochs' : epochs # 15
     }
     dropout = 0.2
-    clf_cnn_lstm= CNN_LSTM(X_train_CNN, y_test_onehot, dropout)
     
     ### LSTM_with_dropout
     LSTM_dropout_params = {
         'batch_size' : batch_size,
         'epochs' : epochs #15
     }
-    clf_lstm_dropout = LSTM_with_dropout(X_test_LSTM, y_test_onehot, dropout)
     
     ### LSTM
     LSTM_params = {
@@ -94,31 +87,60 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
         'epochs' : epochs #15
     }
     
-    clf_LSTM= basic_LSTM(X_test_LSTM, y_test_onehot)
-    
     ### bidirectional LSTM
     biLSTM_params = {
         'batch_size' : batch_size,
         'epochs' : epochs #15
     }
-    clf_biLSTM= Bidirectional_LSTM(X_test_LSTM, y_test_onehot)
     
     ### DNN
     DNN_params = {
         'batch_size' : batch_size,
         'epochs' : epochs #15
     }
-    clf_dnn = DNN(train_x, y_train_onehot, dropout)
+        
+    d_train_lgb = lgb.Dataset(train_x, label=train_y)
+    lgb_params = {"max_depth": 25, "learning_rate" : 0.1, "num_leaves": 300,  "n_estimators": 200}
+    
+    clf_sLSTM= None
+    clf_cnn= None
+    clf_cnn_lstm= None
+    clf_lstm_dropout = None
+    clf_LSTM= None
+    clf_biLSTM= None
+    clf_dnn = None
+    LGB = None
+    
+    if lookahead:
+        print("lookahead is applied")
+        clf_sLSTM= stacked_LSTM_lookahead(X_test_LSTM, y_test_onehot)
+        clf_cnn= CNN_lookahead(X_train_CNN, y_test_onehot)
+        clf_cnn_lstm= CNN_LSTM_lookahead(X_train_CNN, y_test_onehot)
+        clf_lstm_dropout = LSTM_with_dropout_lookahead(X_test_LSTM, y_test_onehot, dropout)
+        clf_LSTM= basic_LSTM_lookahead(X_test_LSTM, y_test_onehot)
+        clf_biLSTM= Bidirectional_LSTM_lookahead(X_test_LSTM, y_test_onehot)
+        clf_dnn = DNN_lookahead(train_x, y_train_onehot)
+    else:
+        print("traditional optimizer is applied")
+        clf_sLSTM= stacked_LSTM(X_test_LSTM, y_test_onehot)
+        clf_cnn= CNN(X_train_CNN, y_test_onehot)
+        clf_cnn_lstm= CNN_LSTM(X_train_CNN, y_test_onehot)
+        clf_lstm_dropout = LSTM_with_dropout(X_test_LSTM, y_test_onehot, dropout)
+        clf_LSTM= basic_LSTM(X_test_LSTM, y_test_onehot)
+        clf_biLSTM= Bidirectional_LSTM(X_test_LSTM, y_test_onehot)
+        clf_dnn = DNN(train_x, y_train_onehot)
+        LGB = lgb.train(lgb_params, d_train_lgb)        
+        
     # 5个一级分类器
     clfs = [#SVC(C = 3, kernel="rbf"),
-            OneVsRestClassifier(LinearSVC(random_state=0)),
-            RandomForestClassifier(n_estimators=100, max_features="log2", max_depth=10, min_samples_leaf=1, bootstrap=True, n_jobs=-1, random_state=1),
-            KNeighborsClassifier(n_neighbors=15, n_jobs=-1),
-            xgb.XGBClassifier(n_estimators=100, objective="multi:softmax", gamma=1, max_depth=10, subsample=0.8, nthread=-1, seed=1, num_class=3),
-            ExtraTreesClassifier(n_estimators=100, criterion="gini", max_features="log2", max_depth=10, min_samples_split=2, min_samples_leaf=1,bootstrap=True, n_jobs=-1, random_state=1),
             clf_sLSTM,
             clf_cnn_lstm,
-            clf_dnn
+            clf_dnn,
+            OneVsRestClassifier(LinearSVC(random_state=0)),
+            RandomForestClassifier(n_estimators=800, max_features="log2", max_depth=25, min_samples_leaf=2, min_samples_split=2, bootstrap=True, n_jobs=-1, random_state=1),
+            xgb.XGBClassifier(base_score=0.5, booster='gbtree', colsample_bylevel=1, colsample_bynode=1, colsample_bytree=1, gamma=0, learning_rate=0.16, max_delta_step=0, max_depth=10, min_child_weight=3, missing=None, n_estimators=200, n_jobs=1, nthread=None, objective='multi:softprob', random_state=0, reg_alpha=0, reg_lambda=1, scale_pos_weight=1, seed=None, silent=None, subsample=1, verbosity=1),
+            ExtraTreesClassifier(bootstrap=False, class_weight=None, criterion='entropy', max_depth=30, max_features='auto', max_leaf_nodes=None, min_impurity_decrease=0.0, min_impurity_split=None, min_samples_leaf=2, min_samples_split=5,min_weight_fraction_leaf=0.0, n_estimators=500, n_jobs=None, oob_score=False, random_state=None, verbose=0, warm_start=False),
+            #CatBoostClassifier(eval_metric="MultiClass", depth=10, iterations= 300, l2_leaf_reg= 9, learning_rate= 0.15)
             ]
 
     # 二级分类器的train_x, test
@@ -126,7 +148,7 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
     dataset_blend_test = np.zeros((test_x.shape[0], len(clfs)), dtype=np.int)
     # 5个分类器进行8_folds预测
 
-    n_folds = 8 # 8
+    n_folds = 9 # 8
 
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=1)
 
@@ -137,7 +159,7 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
         for j,(train_index,test_index) in enumerate(skf.split(train_x, train_y)):
             tr_x = train_x[train_index]
             tr_y = train_y.values[train_index]
-            if i == 5:
+            if i == 0:
                 # reshape X to be [samples, time steps, features]
                 tr_x = np.reshape(tr_x, (tr_x.shape[0], 1, tr_x.shape[1]))
                 tr_y = np_utils.to_categorical(tr_y)
@@ -148,7 +170,7 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
                 dataset_blend_train[test_index, i] = transformResult(sLSTM_prediction)
                 X_test_LSTM = np.reshape(test_x, (test_x.shape[0], 1, test_x.shape[1]))
                 dataset_blend_test_j[:, j] = transformResult(clf.predict(X_test_LSTM))
-            elif i == 6:
+            elif i == 1:
                 tr_x = np.reshape(tr_x, (tr_x.shape[0], tr_x.shape[1], 1))
                 tr_y = np_utils.to_categorical(tr_y)
                 clf.fit(tr_x, tr_y, CNN_LSTM_params['batch_size'], CNN_LSTM_params['epochs'])
@@ -158,11 +180,17 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
                 dataset_blend_train[test_index, i] = transformResult(CNN_LSTM_prediction)  
                 X_test_CNN_LSTM = np.reshape(test_x, (test_x.shape[0], test_x.shape[1], 1))
                 dataset_blend_test_j[:, j] = transformResult(clf.predict(X_test_CNN_LSTM))
-            elif i == 7:
+            elif i == 2:
                 tr_y = np_utils.to_categorical(tr_y)
                 clf.fit(tr_x, tr_y, DNN_params['batch_size'], DNN_params['epochs'])
                 dataset_blend_train[test_index, i] = transformResult(clf.predict(train_x[test_index]))
                 dataset_blend_test_j[:, j] = transformResult(clf.predict(test_x))
+            elif i == 7:
+                clf.fit(tr_x, tr_y)
+                pre_train = clf.predict(train_x[test_index])
+                dataset_blend_train[test_index, i] = pre_train.flatten()
+                prediction = clf.predict(test_x)
+                dataset_blend_test_j[:, j] = prediction.flatten()
             else:
                 clf.fit(tr_x, tr_y)
                 dataset_blend_train[test_index, i] = clf.predict(train_x[test_index])
@@ -171,85 +199,55 @@ def stacking(train_x, train_y, test_x, test_y, epochs, batch_size):
         dataset_blend_test[:, i] = dataset_blend_test_j.sum(axis=1) // (n_folds//2 + 1)
 
     # 二级分类器进行预测
-
-    clf = LogisticRegression(penalty="l2", tol=1e-6, C=1.0, random_state=1, n_jobs=-1, multi_class='multinomial', solver='newton-cg')
-
-    clf.fit(dataset_blend_train, train_y)
+    #clf = LogisticRegression(penalty="l2", tol=1e-6, C=1.0, random_state=1, n_jobs=-1, multi_class='multinomial', solver='newton-cg')
+    model = xgb.XGBClassifier(base_score=0.5, booster='gbtree', colsample_bylevel=1, 
+                              colsample_bynode=1, colsample_bytree=1, gamma=0, 
+                              learning_rate=0.16, max_delta_step=0, max_depth=10, 
+                              min_child_weight=3, missing=None, n_estimators=200, 
+                              n_jobs=1, nthread=None, objective='multi:softprob', 
+                              random_state=0, reg_alpha=0, reg_lambda=1, scale_pos_weight=1, 
+                              seed=None, silent=None, subsample=1, verbosity=1)
     
-    prediction = clf.predict(dataset_blend_test)
+    X_train, y_train = dataset_blend_train, train_y
+    X_test, y_test = dataset_blend_test, test_y
     
-    return prediction, dataset_blend_train, dataset_blend_test
-
-if __name__ == "__main__":
-    df = pd.read_csv('all_features_with_label.csv', sep=',',header=None) 
-    df_feature = df.iloc[:, 1:]
-    X = df_feature.values
-    label = df.iloc[:,0]
-    y = label.values
-    cols = list(df)
-    columns_names = ["label"]
-    for i in range(0, 1817):
-        columns_names.append("Column " + str(i))
-    df.columns = columns_names
-    """
-        DATA EXPLORATION ANALYSIS
-    """
-    #correlation matrix
-    #k = 15 #number of variables for heatmap
-    #corrmat = df.corr()
-    #cols = corrmat.nlargest(k, 'label')['label'].index
-    #cm = np.corrcoef(df[cols].values.T)
-    #sns.set(font_scale=1.25)
-    #hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values, xticklabels=cols.values)
-    #plt.show()
+    eval_set = [(X_train, y_train), (X_test, y_test)]
     
-    #scatterplot
-    #sns.set()
-    #sns.pairplot(df[cols], size = 2.5)
-    #plt.show()
+    model.fit(X_train, y_train, eval_metric=["merror", "mlogloss"], eval_set=eval_set, verbose=True)
+    #model.fit(X_train, y_train)
+    # make predictions for test data
+    y_pred = model.predict(X_test)
+    predictions = [round(value) for value in y_pred]
     
-    #missing data
-    total = df_feature.isnull().sum().sort_values(ascending=False)
-    percent = (df_feature.isnull().sum()/df_feature.isnull().count()).sort_values(ascending=False)
-    missing_data = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
-    #print(missing_data.head(20))
+    # evaluate predictions
+    accuracy = accuracy_score(y_test, predictions)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
     
-    threshold = 0.80
-    corr_matrix = df[df['label'].notnull()].corr().abs()
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k = 1).astype(np.bool))
-    to_drop = [column for column in upper.columns if any(upper[column] >= threshold)]
-    #df_removed = df.drop(columns = to_drop)
-    df_removed = df.drop(to_drop, axis=1)
+    # retrieve performance metrics
+    results = model.evals_result()
+    epochs = len(results['validation_0']['merror'])
+    x_axis = range(0, epochs)
     
-    X = df_removed.drop(['label'], axis=1)
-    y = df_removed[['label']]
+    lookahead_label = ' with RMSprop'
+    if lookahead: 
+        lookahead_label = ' with Lookahead'
+    # plot log loss
+    fig, ax = pyplot.subplots()
+    ax.plot(x_axis, results['validation_0']['mlogloss'], label='Train')
+    ax.plot(x_axis, results['validation_1']['mlogloss'], label='Test')
+    ax.legend()
+    pyplot.ylabel('mLog Loss')
+    pyplot.title('mLog Loss' + lookahead_label)
+    plt.savefig('../result/mLog Loss for stacked model.png', dpi=300)
+    pyplot.show()
+    # plot classification error
+    fig, ax = pyplot.subplots()
+    ax.plot(x_axis, results['validation_0']['merror'], label='Train')
+    ax.plot(x_axis, results['validation_1']['merror'], label='Test')
+    ax.legend()
+    pyplot.ylabel('Classification mError')
+    pyplot.title('Classification mError' + lookahead_label)
+    plt.savefig('../result/Classification mError for stacked model.png', dpi=300)
+    pyplot.show()
     
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
-    
-    scaler = MinMaxScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-    best_acc = 0
-    best_epo = 0
-    best_size = 0
-    
-    for epochs in range(10, 16, 1):
-        for batch_size in range(200, 500, 50):
-            prediction, dataset_blend_train, dataset_blend_test = stacking(X_train, y_train, X_test, y_test, epochs, batch_size)
-            accuracy, precision, recall, F1, fbeta = getAccuracyMulti(prediction, y_test)
-            print(epochs)
-            print(batch_size)
-            print(accuracy)    
-            print(precision)    
-            print(recall)    
-            print(F1)    
-            print(fbeta)
-            if accuracy > best_acc:
-                best_acc = accuracy
-                best_epo = epochs
-                best_size = batch_size
-      
-    print("final output")    
-    print(best_acc)
-    print(best_epo)
-    print(best_size)
+    return predictions, dataset_blend_train, dataset_blend_test
